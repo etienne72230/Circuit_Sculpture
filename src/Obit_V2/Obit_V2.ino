@@ -3,7 +3,12 @@
 
 #include <ThreeWire.h>  
 #include <RtcDS1302.h>
-#include <TM1637Display.h>
+
+#include <SPI.h>
+//EPD
+#include "Display_EPD_W21_spi.h"
+#include "Display_EPD_W21.h"
+#include "Ap_29demo.h"  
 
 // ATtiny84 pins
 int const buzzer = 6;  //ATtiny84 pin 7 -> buzzer
@@ -15,17 +20,10 @@ uint8_t last_minute = 0;
 bool half_passed = false;
 
 // Pin 11 (2) - > IO PIN 6
-// Pin 9 (4) - > SCLK PIN 7
+// Pin 6 (7) - > SCLK PIN 7
 // Pin 10 (3)  - > CE PIN 5
-ThreeWire myWire(2,4,3); // IO, SCLK, CE
+ThreeWire myWire(2,7,3); // IO, SCLK, CE
 RtcDS1302<ThreeWire> Rtc(myWire);
-
-// Instantiation and pins configurations
-// Pin 3 (9) - > CLK
-// Pin 2 (10) - > DIO
-#define CLK 9
-#define DIO 10
-TM1637Display display(CLK, DIO);
 
 void setup() {  
   pinMode(buzzer, INPUT);
@@ -60,14 +58,18 @@ void setup() {
     half_passed = now.Minute() > 30;
   }
 
-//  display.setBrightness(7, true);
-//  Song();
-//  RtcDateTime now = Rtc.GetDateTime();
-//  last_hour = now.Hour();
-//  last_minute = now.Minute();
-//  Display_On(now);
-//  delay(2000);
-//  Display_Off();
+   // DIsplay configuration
+   pinMode(PIN_BUSY, INPUT);  //BUSY
+   pinMode(PIN_RES, OUTPUT); //RES 
+   pinMode(PIN_DC, OUTPUT); //DC   
+   pinMode(PIN_CS, OUTPUT); //CS   
+   //SPI
+   SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0)); 
+   SPI.begin ();
+   EPD_HW_Init_Fast();
+   RtcDateTime now = Rtc.GetDateTime();
+   Display(now, true);
+   EPD_DeepSleep();
 }
 
 void loop () {
@@ -77,23 +79,17 @@ void loop () {
   int hour = now.Hour();
   int minute = now.Minute();
   if (hour != last_hour){
-    Display_On(now);
     Song();
-    delay(3000);
-    Display_Off();
+    Display(now, true);
     
     half_passed = false;
   }else if(minute == 30 and not half_passed){
     // Half hour
-    Display_On(now);
     Buzz();
-    delay(3000);
-    Display_Off();
+    Display(now, true);
     half_passed = true;
   }else if (minute != last_minute){
-    Display_On(now);
-    delay(1000);
-    Display_Off();
+    Display(now, false);
   }
   last_hour = hour;
   last_minute = minute;
@@ -157,18 +153,26 @@ ISR(WDT_vect){
 
 // Function ****************************************************
 
-void Display_On(RtcDateTime now){
-  display.setBrightness(7, true);
-  display.showNumberDecEx(now.Hour()*100 + now.Minute(), (0x40), true);
-}
-
-void Display_Off(){
-  display.clear();
-  display.setBrightness(0, false);
+void Display(RtcDateTime now, boolean full_screen_refresh){
+  if (full_screen_refresh){
+    EPD_HW_Init_Fast();
+    //EPD_WhiteScreen_White(); //Clear screen function.
+    EPD_SetRAMValue_White(); // to much ?
+  }
+  int hour = now.Hour();
+  int minute = now.Minute();
+  EPD_Dis_Part_Time(32,60+32*0,Num[minute%10],         //x-A,y-A,DATA-A
+                  32,60+32*1,Num[minute/10],         //x-B,y-B,DATA-B
+                  32,60+32*2,gImage_numdot, //x-C,y-C,DATA-C
+                  32,60+32*3,Num[hour%10],        //x-D,y-D,DATA-D
+                  32,60+32*4,Num[hour/10],32,64); //x-E,y-E,DATA-E,Resolution 32*64
+  EPD_DeepSleep();
 }
 
 void reset(){
   Buzz();
+  EPD_HW_Init();
+  EPD_SetRAMValue_White();
   last_hour = 18;
   last_minute = 0;
   half_passed = false;
@@ -179,13 +183,13 @@ void reset(){
   Rtc.SetDateTime(reset_date);
 
   RtcDateTime now = Rtc.GetDateTime();
-  Display_On(now);
-  delay(2000);
+  Display(now, true);
   btn_pressed = false;
-  Display_Off();
 }
 void reset_detailed(){
   Buzz();
+  EPD_HW_Init();
+  EPD_SetRAMValue_White();
   last_hour = 0;
   last_minute = 0;
   half_passed = false;
@@ -195,7 +199,7 @@ void reset_detailed(){
   if (!Rtc.GetIsRunning()) Rtc.SetIsRunning(true);
 
   RtcDateTime reset_date = RtcDateTime(2023, 1, 1, last_hour, 0, 0);
-  Display_On(reset_date);
+  Display(reset_date, true);
   unsigned long start_time = millis();
   int setup_time = 2000;
   while (millis() - start_time < setup_time){
@@ -206,7 +210,7 @@ void reset_detailed(){
         last_hour += 1;
         if (last_hour ==24) last_hour = 0;
         reset_date = RtcDateTime(2023, 1, 1, last_hour, 0, 0);
-        Display_On(reset_date);
+        Display(reset_date, false);
       }
       last_state = state;
     }
@@ -221,7 +225,7 @@ void reset_detailed(){
         last_minute += 1;
         if (last_minute == 60) last_minute = 0;
         reset_date = RtcDateTime(2023, 1, 1, last_hour, last_minute, 0);
-        Display_On(reset_date);
+        Display(reset_date, false);
       }
       last_state = state;
     }
@@ -231,8 +235,6 @@ void reset_detailed(){
   Rtc.SetDateTime(reset_date);
   Rtc.SetIsWriteProtected(true);
   btn_pressed = false;
-
-  Display_Off();
 }
 
 void button_interrupt_handler(){
