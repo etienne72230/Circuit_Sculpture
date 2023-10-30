@@ -19,10 +19,10 @@ uint8_t last_hour = 0;
 uint8_t last_minute = 0;
 bool half_passed = false;
 
-// Pin 11 (2) - > IO PIN 6
-// Pin 6 (7) - > SCLK PIN 7
-// Pin 10 (3)  - > CE PIN 5
-ThreeWire myWire(2,7,3); // IO, SCLK, CE
+// Pin 3 (9) - > IO PIN 6
+// Pin 2 (10) - > SCLK PIN 7
+// Pin 6 (7)  - > CE PIN 5
+ThreeWire myWire(9,10,7); // IO, SCLK, CE
 RtcDS1302<ThreeWire> Rtc(myWire);
 
 void setup() {  
@@ -68,7 +68,7 @@ void setup() {
    SPI.begin ();
    EPD_HW_Init_Fast();
    RtcDateTime now = Rtc.GetDateTime();
-   Display(now, true);
+   //Display(now, true);
    EPD_DeepSleep();
 }
 
@@ -86,7 +86,7 @@ void loop () {
   }else if(minute == 30 and not half_passed){
     // Half hour
     Buzz();
-    Display(now, true);
+    Display(now, false);
     half_passed = true;
   }else if (minute != last_minute){
     Display(now, false);
@@ -171,7 +171,7 @@ void Display(RtcDateTime now, boolean full_screen_refresh){
 
 void reset(){
   Buzz();
-  EPD_HW_Init();
+  EPD_HW_Init_Fast();
   EPD_SetRAMValue_White();
   last_hour = 18;
   last_minute = 0;
@@ -188,7 +188,7 @@ void reset(){
 }
 void reset_detailed(){
   Buzz();
-  EPD_HW_Init();
+  EPD_HW_Init_Fast();
   EPD_SetRAMValue_White();
   last_hour = 0;
   last_minute = 0;
