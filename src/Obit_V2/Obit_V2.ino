@@ -8,7 +8,9 @@
 //EPD
 #include "Display_EPD_W21_spi.h"
 #include "Display_EPD_W21.h"
-#include "Ap_29demo.h"  
+#include "font.h"
+
+#define countof(a) (sizeof(a) / sizeof(a[0]))
 
 // ATtiny84 pins
 int const buzzer = 6;  //ATtiny84 pin 7 -> buzzer
@@ -73,7 +75,7 @@ void setup() {
 }
 
 void loop () {
-  if (btn_pressed) reset();
+  if (btn_pressed) reset_with_date();
   
   RtcDateTime now = Rtc.GetDateTime();
   int hour = now.Hour();
@@ -161,11 +163,43 @@ void Display(RtcDateTime now, boolean full_screen_refresh){
   }
   int hour = now.Hour();
   int minute = now.Minute();
-  EPD_Dis_Part_Time(32,60+32*0,Num[minute%10],         //x-A,y-A,DATA-A
-                  32,60+32*1,Num[minute/10],         //x-B,y-B,DATA-B
-                  32,60+32*2,gImage_numdot, //x-C,y-C,DATA-C
-                  32,60+32*3,Num[hour%10],        //x-D,y-D,DATA-D
-                  32,60+32*4,Num[hour/10],32,64); //x-E,y-E,DATA-E,Resolution 32*64
+  int ecart = BIG_WIDTH*2+2;
+  int x = 45;
+  int y = 65;
+  
+  if(now.Year() >= 2023){
+    char month_list[][10] =
+    {
+      "janvier",
+      "fevrier",
+      "mars",
+      "avril",
+      "mai",
+      "juin",
+      "juillet",
+      "aout",
+      "septembre",
+      "octobre",
+      "novembre",
+      "decembre"
+    };
+    char* month = month_list[now.Month()-1];
+    char datestring[18];
+    snprintf_P(datestring, 
+            countof(datestring),
+            PSTR("%02u %s %04u"),
+            now.Day(),
+            month,
+            now.Year());
+    Draw_String(0, 0, datestring);
+  }
+  EPD_Dis_Part_Time(x,y+ecart*0,Num[minute%10],         //x-A,y-A,DATA-A
+                    x,y+ecart*1,Num[minute/10],         //x-B,y-B,DATA-B
+                    x,y+ecart*2,Num[10], //x-C,y-C,DATA-C
+                    x,y+ecart*3,Num[hour%10],        //x-D,y-D,DATA-D
+                    x,y+ecart*4,Num[hour/10],BIG_WIDTH, BIG_HEIGHT); //x-E,y-E,DATA-E,Resolution 32*64
+
+  EPD_Part_Update();
   EPD_DeepSleep();
 }
 
@@ -235,6 +269,122 @@ void reset_detailed(){
   Rtc.SetDateTime(reset_date);
   Rtc.SetIsWriteProtected(true);
   btn_pressed = false;
+}
+
+void reset_with_date(){
+  Buzz();
+  EPD_HW_Init_Fast();
+  EPD_SetRAMValue_White();
+  last_hour = 12;
+  last_minute = 0;
+  half_passed = false;
+  int last_state = HIGH;
+  int year = 1;
+  int mounth = 1;
+  int day = 1;
+  Rtc.Begin();
+  if (Rtc.GetIsWriteProtected()) Rtc.SetIsWriteProtected(false);
+  if (!Rtc.GetIsRunning()) Rtc.SetIsRunning(true);
+
+  RtcDateTime reset_date = RtcDateTime(1, 1, 1, last_hour, 0, 0);
+  Display(reset_date, true);
+  unsigned long start_time = millis();
+  int setup_time = 3000;
+  
+  // Hour
+  while (millis() - start_time < setup_time){
+    int state = digitalRead(btn);
+    if (state != last_state){
+      if (state == LOW){
+        start_time = millis();
+        last_hour += 1;
+        if (last_hour ==24) last_hour = 0;
+        reset_date = RtcDateTime(1, 1, 1, last_hour, 0, 0);
+        Display(reset_date, false);
+      }
+      last_state = state;
+    }
+  }
+  
+  // Minute
+  Buzz();
+  start_time = millis();
+  while (millis() - start_time < setup_time){
+    int state = digitalRead(btn);
+    if (state != last_state){
+      if (state == LOW){
+        start_time = millis();
+        last_minute += 1;
+        if (last_minute == 60) last_minute = 0;
+        reset_date = RtcDateTime(1, 1, 1, last_hour, last_minute, 0);
+        Display(reset_date, false);
+      }
+      last_state = state;
+    }
+  }
+  half_passed = last_minute > 30;
+  
+  // Year
+  Buzz();
+  start_time = millis();
+  while (millis() - start_time < setup_time){
+    int state = digitalRead(btn);
+    if (state != last_state){
+      if (state == LOW){
+        if (year < 2023){
+          year = 2023;
+        }else{
+          year += 1;
+        }
+        start_time = millis();
+        reset_date = RtcDateTime(year, 1, 1, last_hour, last_minute, 0);
+        Display(reset_date, false);
+      }
+      last_state = state;
+    }
+  }
+  if (year >= 2023){
+    
+    // Mounth
+    Buzz();
+    start_time = millis();
+    while (millis() - start_time < setup_time){
+      int state = digitalRead(btn);
+      if (state != last_state){
+        if (state == LOW){
+          start_time = millis();
+          mounth += 1;
+          if (mounth == 13) mounth = 1;
+          reset_date = RtcDateTime(year, mounth, 1, last_hour, last_minute, 0);
+          Display(reset_date, false);
+        }
+        last_state = state;
+      }
+    }
+
+    // Day
+    Buzz();
+    start_time = millis();
+    while (millis() - start_time < setup_time){
+      int state = digitalRead(btn);
+      if (state != last_state){
+        if (state == LOW){
+          start_time = millis();
+          day += 1;
+          if (day == 32) day = 1;
+          reset_date = RtcDateTime(year, mounth, day, last_hour, last_minute, 0);
+          Display(reset_date, false);
+        }
+        last_state = state;
+      }
+    }
+  }
+  
+  reset_date = RtcDateTime(year, mounth, day, last_hour, last_minute, 0);
+  Rtc.SetDateTime(reset_date);
+  Rtc.SetIsWriteProtected(true);
+  btn_pressed = false;
+  Song();
 }
 
 void button_interrupt_handler(){
