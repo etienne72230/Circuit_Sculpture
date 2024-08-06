@@ -68,10 +68,12 @@ void setup() {
    //SPI
    SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0)); 
    SPI.begin ();
-   EPD_HW_Init_Fast();
    RtcDateTime now = Rtc.GetDateTime();
    //Display(now, true);
-   EPD_DeepSleep();
+   //if(isEPD_W21_BUSY==0){
+    EPD_HW_Init_Fast();
+    EPD_DeepSleep();
+   //}
 }
 
 void loop () {
@@ -82,7 +84,7 @@ void loop () {
   int minute = now.Minute();
   if (hour != last_hour){
     Song();
-    Display(now, true);
+    Display(now, hour == 14); //Refesh all the screen 1 time a day at 14h00
     
     half_passed = false;
   }else if(minute == 30 and not half_passed){
@@ -156,51 +158,53 @@ ISR(WDT_vect){
 // Function ****************************************************
 
 void Display(RtcDateTime now, boolean full_screen_refresh){
-  if (full_screen_refresh){
-    EPD_HW_Init_Fast();
-    //EPD_WhiteScreen_White(); //Clear screen function.
-    EPD_SetRAMValue_White(); // to much ?
-  }
-  int hour = now.Hour();
-  int minute = now.Minute();
-  int ecart = BIG_WIDTH*2+2;
-  int x = 45;
-  int y = 65;
+  //if(isEPD_W21_BUSY==0){
+    if (full_screen_refresh){
+      EPD_HW_Init_Fast();
+      //EPD_WhiteScreen_White(); //Clear screen function.
+      EPD_SetRAMValue_White(); // to much ?
+    }
+    int hour = now.Hour();
+    int minute = now.Minute();
+    int ecart = BIG_WIDTH*2+2;
+    int x = 45;
+    int y = 65;
+    
+    if(now.Year() >= 2023){
+      char month_list[][10] =
+      {
+        "janvier",
+        "fevrier",
+        "mars",
+        "avril",
+        "mai",
+        "juin",
+        "juillet",
+        "aout",
+        "septembre",
+        "octobre",
+        "novembre",
+        "decembre"
+      };
+      char* month = month_list[now.Month()-1];
+      char datestring[18];
+      snprintf_P(datestring, 
+              countof(datestring),
+              PSTR("%02u %s %04u"),
+              now.Day(),
+              month,
+              now.Year());
+      Draw_String(0, 0, datestring);
+    }
+    EPD_Dis_Part_Time(x,y+ecart*0,Num[minute%10],         //x-A,y-A,DATA-A
+                      x,y+ecart*1,Num[minute/10],         //x-B,y-B,DATA-B
+                      x,y+ecart*2,Num[10], //x-C,y-C,DATA-C
+                      x,y+ecart*3,Num[hour%10],        //x-D,y-D,DATA-D
+                      x,y+ecart*4,Num[hour/10],BIG_WIDTH, BIG_HEIGHT); //x-E,y-E,DATA-E,Resolution 32*64
   
-  if(now.Year() >= 2023){
-    char month_list[][10] =
-    {
-      "janvier",
-      "fevrier",
-      "mars",
-      "avril",
-      "mai",
-      "juin",
-      "juillet",
-      "aout",
-      "septembre",
-      "octobre",
-      "novembre",
-      "decembre"
-    };
-    char* month = month_list[now.Month()-1];
-    char datestring[18];
-    snprintf_P(datestring, 
-            countof(datestring),
-            PSTR("%02u %s %04u"),
-            now.Day(),
-            month,
-            now.Year());
-    Draw_String(0, 0, datestring);
-  }
-  EPD_Dis_Part_Time(x,y+ecart*0,Num[minute%10],         //x-A,y-A,DATA-A
-                    x,y+ecart*1,Num[minute/10],         //x-B,y-B,DATA-B
-                    x,y+ecart*2,Num[10], //x-C,y-C,DATA-C
-                    x,y+ecart*3,Num[hour%10],        //x-D,y-D,DATA-D
-                    x,y+ecart*4,Num[hour/10],BIG_WIDTH, BIG_HEIGHT); //x-E,y-E,DATA-E,Resolution 32*64
-
-  EPD_Part_Update();
-  EPD_DeepSleep();
+    EPD_Part_Update();
+    EPD_DeepSleep();
+  //}
 }
 
 void reset(){

@@ -6,7 +6,8 @@
 //Busy function
 void Epaper_READBUSY(void)
 { 
-  while(1)
+  unsigned long  start_time = millis();
+  while(millis()- start_time < 3000)
   {  //=1 BUSY
      if(isEPD_W21_BUSY==0) break;    
   }  
