@@ -357,22 +357,14 @@ void EPD_Dis_2_Part_RAM(unsigned int x_start,unsigned int y_start,const unsigned
   EPD_W21_WriteCMD(0x24);   //Write Black and White image to RAM
   unsigned int x = 0;
   unsigned int y = 0;
-  for(i=0;i<PART_COLUMN*PART_LINE/8;i++)
-   { 
-    if (i%2 == 0){   
-     EPD_W21_WriteDATA((Stretch(pgm_read_byte(&datas[x+PART_LINE/8*y]))& 0xFF00)>>8);                  
-
-    }else{
-      EPD_W21_WriteDATA(Stretch(pgm_read_byte(&datas[x+PART_LINE/8*y]))& 0x00FF);
-      x++;
+  bool first_y = true;
+  for(y=0; y < PART_COLUMN/2; y++){
+    for(i=0; i < 2; i++){
+      for(x=0; x < PART_LINE/16 ; x++){
+        EPD_W21_WriteDATA16(Stretch(pgm_read_byte(&datas[x+PART_LINE/16*y])));
+      }
     }
-    if(i%(PART_LINE/8) == 0){
-      x = 0;
-    }
-    if(i%(PART_LINE/2) == 0 and i != 0){
-      y++;
-    }
-   } 
+  }
 }
 
 //Clock display
@@ -395,7 +387,7 @@ void EPD_Dis_Part_Time(unsigned int x_startA,unsigned int y_startA,const unsigne
 void Draw_String(int x, int y, const char* text){
   const char* p_text = text;
   int index;
-  y = y + EPD_HEIGHT + FONT_WIDTH * ((sizeof(text) / sizeof(text[0]))-2);
+  y += EPD_HEIGHT + FONT_WIDTH * ((sizeof(text) / sizeof(text[0]))-2);
   while (*p_text != 0){
     if(*p_text >= 48 and *p_text <= 57){
       index = *p_text - 48;
@@ -406,8 +398,12 @@ void Draw_String(int x, int y, const char* text){
     }else{
       index = 10;
     }
-    EPD_Dis_Part_RAM(x ,y,Char[index], FONT_WIDTH,FONT_HEIGHT);
-    y -= FONT_WIDTH;
+    EPD_Dis_2_Part_RAM(x ,y,Char[index], FONT_WIDTH,FONT_HEIGHT);
+    if(index == 10){ // downsize space char
+      y -= FONT_WIDTH;
+    }else{
+      y -= 2*FONT_WIDTH;
+    }
     p_text++;
   }
 }

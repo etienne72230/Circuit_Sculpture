@@ -27,7 +27,9 @@
 #define EPD_W21_CS_1 digitalWrite(PIN_CS,HIGH)
 
 void SPI_Write(unsigned char value);
+void SPI_Write16(unsigned int value);
 void EPD_W21_WriteDATA(unsigned char datas);
+void EPD_W21_WriteDATA16(unsigned int datas);
 void EPD_W21_WriteCMD(unsigned char command);
 
 #endif 
